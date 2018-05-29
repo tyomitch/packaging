@@ -6,15 +6,22 @@ ARG  ssl=libssl-dev
 ENV  CFLAGS=-w CXXFLAGS=-w
 
 RUN apt-get update && apt-get install -y -q --no-install-recommends \
+    bison \
     build-essential \
+    flex \
+    gperf \
     libfontconfig1-dev \
     libfreetype6-dev \
+    libicu-dev \
     $jpeg \
     libpng-dev \
     $ssl \
     libx11-dev \
+    libxcb1-dev \
     libxext-dev \
     libxrender-dev \
+    perl \
     python \
+    ruby \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
