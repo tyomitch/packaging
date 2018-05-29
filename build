@@ -17,37 +17,18 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with wkhtmltopdf. If not, see <http://www.gnu.org/licenses/#LGPL>.
 
+from __future__ import print_function
+
 import argparse, datetime, importlib, json, multiprocessing, os, subprocess, sys, yaml
 
-def message(msg):
-    sys.stdout.write(msg+'\n')
-    sys.stdout.flush()
 
-def shell(cmd, cwd=None):
+def _shell(cmd, cwd=None):
     ret = subprocess.call(cmd, shell=True, cwd=cwd)
     if ret:
-        message('%s\ncommand failed: exit code %d' % (cmd, ret))
+        print('%s\ncommand failed: exit code %d' % (cmd, ret))
         sys.exit(1)
 
-def docker_images(config, images, push):
-    prefix = config['docker-prefix']
-    target = sorted(images if len(images) else list(config['docker-targets'].keys()))
-    if push:
-        shell('docker login')
-
-    shell(config['qemu-cmd'])
-    for name in target:
-        if name not in config['docker-targets']:
-            message('Unknown target specified: %s' % name)
-            sys.exit(1)
-        params = config['docker-targets'][name]
-        args   = ' '.join('--build-arg %s=%s' % a for a in params['args'].items()) if 'args' in params else ''
-        shell('docker build -f %(source)s %(args)s -t %(prefix)s%(name)s .' % dict(params,
-                args=args, prefix=prefix, name=name))
-        if push:
-            shell('docker push %s%s' % (prefix, name))
-
-def get_version(src_dir, iteration):
+def _get_version(src_dir, iteration):
     rel_ver = open(os.path.join(src_dir, 'VERSION'), 'r').read().strip()
     if '-' not in rel_ver:
         return (rel_ver, iteration)
@@ -70,25 +51,44 @@ def get_version(src_dir, iteration):
 
     return (rel_ver, '0.%s.%s.%s.%s' % (commit_on, offset, rel_tag, commit[1:]))
 
+
+def docker_images(config, images, push):
+    prefix = config['docker-prefix']
+    target = sorted(images if len(images) else list(config['docker-targets'].keys()))
+    if push:
+        _shell('docker login')
+
+    for name in target:
+        if name not in config['docker-targets']:
+            print('Unknown target specified: %s' % name)
+            sys.exit(1)
+        params = config['docker-targets'][name]
+        args   = ' '.join('--build-arg %s=%s' % a for a in params['args'].items()) if 'args' in params else ''
+        _shell('docker build -f %(source)s %(args)s -t %(prefix)s%(name)s .' % dict(params,
+                args=args, prefix=prefix, name=name))
+        if push:
+            _shell('docker push %s%s' % (prefix, name))
+
+
 def compile_docker(config, target, src_dir, tgt_dir, debug=False):
     if target not in config['docker-targets']:
-        message('Unknown target: %s' % target)
+        print('Unknown target: %s' % target)
         sys.exit(1)
 
     if not os.path.exists(os.path.join(src_dir, 'wkhtmltopdf.pro')):
-        message('Not wkhtmltopdf source directory: %s' % src_dir)
+        print('Not wkhtmltopdf source directory: %s' % src_dir)
         sys.exit(1)
 
     if not os.path.exists(os.path.join(src_dir, 'qt', 'configure')):
-        message('Qt not present in wkhtmltopdf source: %s' %  src_dir)
+        print('Qt not present in wkhtmltopdf source: %s' %  src_dir)
         sys.exit(1)
 
-    shell('mkdir -p %(tgt)s/app %(tgt)s/qt' % dict(tgt=tgt_dir))
+    _shell('mkdir -p %(tgt)s/app %(tgt)s/qt' % dict(tgt=tgt_dir))
 
     cross  = config['docker-targets'][target].get('cross_compile')
     dimage = '--user %d:%d %s%s' % (os.getuid(), os.getgid(), config['docker-prefix'], target)
     def dshell(wd, cmd):
-        shell('docker run --rm -v%s:/src -v%s:/tgt -w%s %s %s' % (
+        _shell('docker run --rm -v%s:/src -v%s:/tgt -w%s %s %s' % (
             os.path.abspath(src_dir), os.path.abspath(tgt_dir), wd, dimage, cmd))
 
     if not os.path.exists(os.path.join(tgt_dir, 'qt_configured')):
@@ -98,26 +98,27 @@ def compile_docker(config, target, src_dir, tgt_dir, debug=False):
             config['qt-config'][qtconf].strip(),
             config['qt-config']['debug'].strip() if debug else '',
             '-device-option CROSS_COMPILE=%s' % cross if cross else ''))
-        shell('touch %s/qt_configured' % tgt_dir)
+        _shell('touch %s/qt_configured' % tgt_dir)
 
     dshell('/tgt/qt', 'make -j%d' % multiprocessing.cpu_count())
 
-    shell('rm -fr %s/app/bin %s/wkhtmltox' % (tgt_dir, tgt_dir))
+    _shell('rm -fr %s/app/bin %s/wkhtmltox' % (tgt_dir, tgt_dir))
     if cross:
         dshell('/tgt/app', '/tgt/qt/bin/qmake -set CROSS_COMPILE %s' % cross)
     dshell('/tgt/app', '/tgt/qt/bin/qmake /src/wkhtmltopdf.pro CONFIG+=silent')
     dshell('/tgt/app', 'make install INSTALL_ROOT=/tgt/wkhtmltox')
 
+
 def package_docker(config, target, src_dir, iteration, clean=False):
     tgt_dir = os.path.join('targets', target)
     if clean:
-        shell('rm -fr %s' % tgt_dir)
+        _shell('rm -fr %s' % tgt_dir)
 
     if config['docker-targets'][target].get('qemu'):
-        shell(config['qemu-cmd'])
+        _shell(config['qemu-cmd'])
     compile_docker(config, target, src_dir, tgt_dir)
 
-    pkg_ver, pkg_iter = get_version(src_dir, iteration)
+    pkg_ver, pkg_iter = _get_version(src_dir, iteration)
     output  = config['docker-targets'][target].get('output', 'tar')
     depend  = config['docker-targets'][target].get('depend', '')
 
@@ -131,36 +132,37 @@ def package_docker(config, target, src_dir, iteration, clean=False):
     archive  = 'wkhtmltox-%s-%s.%s' % (pkg_ver, pkg_iter, target)
 
     if output == 'tar':
-        shell('tar -cvf targets/%s.tar -C targets/%s wkhtmltox/' % (archive, target))
-        shell('xz -fv9 targets/%s.tar' % archive)
+        _shell('tar -cvf targets/%s.tar -C targets/%s wkhtmltox/' % (archive, target))
+        _shell('xz -fv9 targets/%s.tar' % archive)
     elif output == '7z':
-        shell('rm -f targets/%s.7z' % archive)
-        shell('cd targets/%s && 7z a ../%s.7z -mx9 wkhtmltox/' % (target, archive))
+        _shell('rm -f targets/%s.7z' % archive)
+        _shell('cd targets/%s && 7z a ../%s.7z -mx9 wkhtmltox/' % (target, archive))
     elif output == 'deb':
         fdeb = '-t deb --deb-compression xz --provides wkhtmltopdf --conflicts wkhtmltopdf --replaces wkhtmltopdf --deb-no-default-config-files'
-        shell('docker run --rm -v%s:/tgt -w/tgt %s %s' % (os.path.abspath('targets'), fpm_args, fdeb))
+        _shell('docker run --rm -v%s:/tgt -w/tgt %s %s' % (os.path.abspath('targets'), fpm_args, fdeb))
     elif output in ('rpm', 'rpm:bzip2'):
         frpm = '-t rpm --rpm-compression %s' % ('xz' if output == 'rpm' else 'bzip2')
-        shell('docker run --rm -v%s:/tgt -w/tgt %s %s' % (os.path.abspath('targets'), fpm_args, frpm))
+        _shell('docker run --rm -v%s:/tgt -w/tgt %s %s' % (os.path.abspath('targets'), fpm_args, frpm))
 
     if clean:
-        shell('rm -fr %s' % tgt_dir)
+        _shell('rm -fr %s' % tgt_dir)
+
 
 def build_vagrant(config, target, src_dir, iteration, clean=False, debug=False, version=None):
     if target not in config['vagrant-targets']:
-        message('Unknown target: %s' % target)
+        print('Unknown target: %s' % target)
         sys.exit(1)
 
     if not os.path.exists(os.path.join(src_dir, 'wkhtmltopdf.pro')):
-        message('Not wkhtmltopdf source directory: %s' % src_dir)
+        print('Not wkhtmltopdf source directory: %s' % src_dir)
         sys.exit(1)
 
     if not os.path.exists(os.path.join(src_dir, 'qt', 'configure')):
-        message('Qt not present in wkhtmltopdf source: %s' %  src_dir)
+        print('Qt not present in wkhtmltopdf source: %s' %  src_dir)
         sys.exit(1)
 
     if version == ['-', '-']:
-        version = get_version(src_dir, '0')
+        version = _get_version(src_dir, '0')
 
     cfg  = config['vagrant-targets'][target]
     vm   = cfg['vm']
@@ -172,27 +174,27 @@ def build_vagrant(config, target, src_dir, iteration, clean=False, debug=False, 
         os.makedirs(tgt_dir)
 
     def outside_vm():
-        cmd_args = '--version "%s" "%s"' % get_version(src_dir, iteration)
+        cmd_args = '--version "%s" "%s"' % _get_version(src_dir, iteration)
 
         if clean:
-            shell('vagrant destroy -f %s' % vm, 'vagrant')
+            _shell('vagrant destroy -f %s' % vm, 'vagrant')
             cmd_args += ' --clean'
         if debug:
             cmd_args += ' --debug'
 
-        shell('vagrant up %s' % vm, 'vagrant')
-        shell('vagrant ssh-config %s > .vagrant/%s_config' % (vm, vm), 'vagrant')
+        _shell('vagrant up %s' % vm, 'vagrant')
+        _shell('vagrant ssh-config %s > .vagrant/%s_config' % (vm, vm), 'vagrant')
 
         def rsync(flags, src, tgt):
-            shell('rsync --info=progress2 -a -e "ssh -F vagrant/.vagrant/%s_config" %s %s/ %s:%s/%s' % (vm, flags, os.path.abspath(src), vm, base, tgt))
+            _shell('rsync --info=progress2 -a -e "ssh -F vagrant/.vagrant/%s_config" %s %s/ %s:%s/%s' % (vm, flags, os.path.abspath(src), vm, base, tgt))
 
-        shell('ssh -F vagrant/.vagrant/%s_config %s -- "bash -c \'mkdir -p %s\'"' % (vm, vm, base))
+        _shell('ssh -F vagrant/.vagrant/%s_config %s -- "bash -c \'mkdir -p %s\'"' % (vm, vm, base))
         rsync('--delete --exclude .git',    src_dir, 'src')
         rsync('--delete --exclude targets', '.',     'pkg')
-        shell('ssh -F vagrant/.vagrant/%s_config %s -- python %s/pkg/build vagrant %s %s ../src' % (vm, vm, target, cmd_args, target))
+        _shell('ssh -F vagrant/.vagrant/%s_config %s -- python %s/pkg/build vagrant %s %s ../src' % (vm, vm, target, cmd_args, target))
         if not debug:
-            shell('scp -F vagrant/.vagrant/%s_config %s:%s/wkhtmltox*.* %s' % (vm, vm, target, tgt_dir))
-            shell('vagrant %s %s' % ('destroy -f' if clean else 'halt', vm), 'vagrant')
+            _shell('scp -F vagrant/.vagrant/%s_config %s:%s/wkhtmltox*.* %s' % (vm, vm, target, tgt_dir))
+            _shell('vagrant %s %s' % ('destroy -f' if clean else 'halt', vm), 'vagrant')
 
     def _conan_paths(key, cmd_arg):
         with open('conanbuildinfo.json', 'r') as f:
@@ -208,17 +210,17 @@ def build_vagrant(config, target, src_dir, iteration, clean=False, debug=False, 
         os.environ['CONAN_USER_HOME'] = os.path.abspath('.')
         c_build = 'missing' if not clean else '*'
         c_debug = '-s build_type=Debug' if debug else ''
-        shell('conan install . -p %s --build "%s" %s' % (target, c_build, c_debug))
+        _shell('conan install . -p %s --build "%s" %s' % (target, c_build, c_debug))
 
         custom = importlib.import_module('vagrant.%s' % cfg.get('custom_build', vm))
         custom_cfg, custom_qmk = custom.prepare_build(config, target, tgt_dir, src_dir)
 
-        shell('rm -fr app wkhtmltox ../wkhtmltox*.*', tgt_dir)
+        _shell('rm -fr app wkhtmltox ../wkhtmltox*.*', tgt_dir)
         for d in ('qt', 'app', 'wkhtmltox'):
             if not os.path.exists(os.path.join(tgt_dir, d)):
                 os.makedirs(os.path.join(tgt_dir, d))
         if not os.path.exists(os.path.join(tgt_dir, 'qt_configured')):
-            shell('%s %s %s %s %s %s %s' % (
+            _shell('%s %s %s %s %s %s %s' % (
                 os.path.join(src_dir, 'qt', 'configure'),
                 config['qt-config']['common'].strip(),
                 config['qt-config'][cfg['qt_config']].strip(),
@@ -226,13 +228,13 @@ def build_vagrant(config, target, src_dir, iteration, clean=False, debug=False, 
                 _conan_paths('include_paths', '-I'),
                 _conan_paths('lib_paths', '-L'),
                 custom_cfg), os.path.join(tgt_dir, 'qt'))
-            shell('touch %s/qt_configured' % tgt_dir)
+            _shell('touch %s/qt_configured' % tgt_dir)
 
         make  = cfg.get('make', 'make -j%d' % multiprocessing.cpu_count())
         qmake = os.path.join(tgt_dir, 'qt', 'bin', 'qmake')
-        shell(make, os.path.join(tgt_dir, 'qt'))
-        shell('%s %s/wkhtmltopdf.pro CONFIG+=silent %s' % (qmake, src_dir, custom_qmk), os.path.join(tgt_dir, 'app'))
-        shell(make, os.path.join(tgt_dir, 'app'))
+        _shell(make, os.path.join(tgt_dir, 'qt'))
+        _shell('%s %s/wkhtmltopdf.pro CONFIG+=silent %s' % (qmake, src_dir, custom_qmk), os.path.join(tgt_dir, 'app'))
+        _shell(make, os.path.join(tgt_dir, 'app'))
         if not debug:
             custom.package_build(config, target, tgt_dir, src_dir, version)
 
@@ -241,12 +243,14 @@ def build_vagrant(config, target, src_dir, iteration, clean=False, debug=False, 
     else:
         outside_vm()
 
+
 def build_release(config, src_dir, iteration):
     for target in sorted(config['docker-targets']):
         package_docker(config, target, src_dir, iteration, clean=True)
 
     for target in sorted(config['vagrant-targets']):
         build_vagrant(config, target, src_dir, iteration, clean=True)
+
 
 def main():
     parser = argparse.ArgumentParser(prog='build')
