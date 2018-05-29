@@ -386,6 +386,15 @@ vagrant-targets:
     msvc_version:   "14.0"
     msvc_redist:    https://download.microsoft.com/download/6/D/F/6DF3FF94-F7F9-4F0B-838C-A328D1A7D0EE/vc_redist.x86.exe
 
+# Qt modules to build
+qt-modules:
+  - name:    qtbase
+    command: "%(src)s/qt5/qtbase/configure %(cfg_args)s"
+  - name:    qtsvg
+    command: "%(build)s/qtbase/bin/qmake %(src)s/qt5/qtsvg/qtsvg.pro"
+  - name:    qtxmlpatterns
+    command: "%(build)s/qtbase/bin/qmake %(src)s/qt5/qtxmlpatterns/qtxmlpatterns.pro"
+
 # Qt configure arguments
 qt-config:
   common: >
