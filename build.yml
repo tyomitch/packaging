@@ -391,47 +391,40 @@ qt-config:
   common: >
     -opensource
     -confirm-license
-    -fast
     -release
     -static
-    -graphicssystem raster
-    -webkit
-    -exceptions
-    -xmlpatterns
     -system-zlib
     -system-libpng
     -system-libjpeg
-    -no-libmng
-    -no-libtiff
+    -icu
     -no-accessibility
-    -no-stl
-    -no-qt3support
-    -no-phonon
-    -no-phonon-backend
     -no-opengl
-    -no-declarative
-    -no-script
-    -no-scripttools
     -no-sql-ibase
     -no-sql-mysql
+    -no-sql-oci
+    -no-sql-tds
+    -no-sql-db2
     -no-sql-odbc
     -no-sql-psql
     -no-sql-sqlite
     -no-sql-sqlite2
-    -no-mmx
-    -no-3dnow
-    -no-sse
-    -no-sse2
-    -no-multimedia
+    -no-qml-debug
+    -no-dbus
     -nomake demos
     -nomake docs
     -nomake examples
     -nomake tools
     -nomake tests
-    -nomake translations
+    -D QT_NO_GRAPHICSVIEW
+    -D QT_NO_GRAPHICSEFFECT
+    -D QT_NO_STYLESHEET
+    -D QT_NO_STYLE_CDE
+    -D QT_NO_STYLE_CLEANLOOKS
+    -D QT_NO_STYLE_MOTIF
+    -D QT_NO_STYLE_PLASTIQUE
+    -D QT_NO_PRINTPREVIEWDIALOG
   debug:
     -debug
-    -webkit-debug
   docker: >
     -silent
     -xrender
@@ -457,7 +450,6 @@ qt-config:
     -no-xkb
     -no-glib
     -no-gstreamer
-    -no-icu
     -no-openvg
     -no-xsync
     -no-audio-backend
@@ -470,10 +462,8 @@ qt-config:
   mingw-w64: >
     -silent
     -openssl-linked
-    -no-reduce-exports
-    -no-rpath
     -no-pch
-    -xplatform win32-g++-4.6
+    -xplatform win32-g++
   macos-carbon: >
     -silent
     -reduce-exports
@@ -496,13 +486,7 @@ qt-config:
     -platform unsupported/macx-clang-libc++
   msvc: >
     -mp
-    -qt-style-windows
-    -no-style-cleanlooks
-    -no-style-windowsxp
-    -no-style-windowsvista
-    -no-style-plastique
-    -no-style-motif
-    -no-style-cde
+    -no-angle
     -openssl-linked
 
 # docker image which provides fpm
