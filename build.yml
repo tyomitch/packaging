@@ -405,6 +405,7 @@ qt-config:
     -system-zlib
     -system-libpng
     -system-libjpeg
+    -system-pcre
     -icu
     -no-accessibility
     -no-opengl
@@ -417,10 +418,7 @@ qt-config:
     -no-sql-psql
     -no-sql-sqlite
     -no-sql-sqlite2
-    -no-qml-debug
     -no-dbus
-    -nomake demos
-    -nomake docs
     -nomake examples
     -nomake tools
     -nomake tests
@@ -436,38 +434,22 @@ qt-config:
     -debug
   docker: >
     -silent
-    -xrender
-    -largefile
     -iconv
     -openssl-linked
-    -no-javascript-jit
     -no-rpath
     -no-dbus
-    -no-nis
     -no-cups
-    -no-pch
-    -no-gtkstyle
-    -no-nas-sound
     -no-sm
-    -no-xshape
-    -no-xinerama
-    -no-xcursor
-    -no-xfixes
-    -no-xrandr
-    -no-mitshm
-    -no-xinput
     -no-xkb
     -no-glib
-    -no-gstreamer
     -no-openvg
-    -no-xsync
-    -no-audio-backend
     -no-sse3
     -no-ssse3
     -no-sse4.1
     -no-sse4.2
     -no-avx
-    -no-neon
+    -no-iconv
+    -qt-xcb
   mingw-w64: >
     -silent
     -openssl-linked
